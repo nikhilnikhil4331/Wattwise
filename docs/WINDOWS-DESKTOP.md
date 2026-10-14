@@ -36,7 +36,7 @@ npm ci
 npm run package:win
 ```
 
-Output: `build/windows/Wattwise-Setup-1.0.0-x64.exe` (NSIS per-user installer).
+Output: `build/windows/Wattwise-Setup-1.1.0-x64.exe` (NSIS per-user installer).
 Installed builds contain the runtime, so end users do not need Node.js or Python.
 The source configuration targets Windows x64; ARM64 is not separately packaged.
 
@@ -52,6 +52,34 @@ installation/build and write-enabled only in the separate publish job.
 No code-signing certificate is configured. Any installer built this way is unsigned
 and may prompt or be blocked by SmartScreen or organization policies. Verify its
 origin and checksum; do not disable Windows protections to make it run.
+
+## Live hardware (1.1)
+
+Choose **Live hardware** in the sidebar. The app automatically queries Windows
+BatteryStatus.ChargeRate/DischargeRate (milliwatts, converted to watts), charging
+flags, and process CPU-time counters. No terminal command or extra driver is
+needed. Rate sentinels, missing values and ambiguous active-charging zero values
+are not displayed as measured zero watts. A full/charge-limited battery can be
+plugged in without charging; this is not a sensor error.
+
+One persistent read-only PowerShell process checks battery status about every
+second and app counters about every five seconds. CPU deltas are normalized by
+logical processor count and grouped by process name, not by an assumed installed
+app identity. PID plus start time prevents PID reuse from crossing app samples.
+Protected, newly started and exited processes may be omitted. Sleep/reconnect and
+intervals over 15 seconds discard the CPU baseline. The UI clears stale readings.
+
+**CPU % is not watts. Battery charge watts are not socket watts.** No CPU/GPU
+package-power sensor, per-app power attribution or wall-meter integration is
+implemented. Diagnostics never enter energy totals/CSV; no process history is
+stored, and no process paths, command lines or usernames are collected. The live
+view runs even in estimate mode and while energy tracking is paused, including
+in the tray. Sleep/quit stop its process. Windows policy blocks are reported, not
+bypassed; Secure Boot/VBS settings are not modified.
+
+The Windows CI smoke test checks the real process feed without a battery, while
+fixture tests cover supported/unsupported charging. Actual HP Victus charging
+sensor availability, calibration and driver behavior need device verification.
 
 ## Desktop behavior
 

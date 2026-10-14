@@ -53,6 +53,10 @@ async function desktopFixture(page) {
         return { saved: true };
       },
     };
+    window.pushHardware = (hardware) => {
+      state.hardware = hardware;
+      for (const listener of listeners) listener(structuredClone(state));
+    };
     window.pushDesktopReading = () => {
       state.sensorError = "";
       state.sensorName = "Windows battery (test)";
@@ -136,4 +140,94 @@ test("desktop bootstrap failure never replaces saved state with demo data", asyn
   expect(
     await page.evaluate(() => localStorage.getItem("wattwise.v1")),
   ).toBeNull();
+});
+
+test("charging and process activity are separate from wall watts and billing", async ({
+  page,
+}) => {
+  await desktopFixture(page);
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: "Live hardware", exact: true })
+    .click();
+  await page.evaluate(() =>
+    window.pushHardware({
+      status: "ready",
+      updatedAt: Date.now(),
+      appsUpdatedAt: Date.now(),
+      device: { processor: "AMD Ryzen 5 5600H", logicalProcessors: 12 },
+      battery: {
+        status: "charging",
+        chargeWatts: 23.5,
+        dischargeWatts: null,
+        message: "Battery-side readings reported by Windows.",
+      },
+      apps: {
+        status: "ready",
+        rows: [{ name: "Browser", cpuPercent: 12.5, processes: 3 }],
+        message: "CPU % is not watts.",
+      },
+    }),
+  );
+  await expect(
+    page.getByRole("region", { name: "Battery charging power", exact: true }),
+  ).toContainText("23.5 W");
+  await expect(
+    page.getByRole("region", { name: "Socket power", exact: true }),
+  ).toContainText("Not measured");
+  await expect(
+    page.getByRole("row", { name: "Browser 3 12.5% Not measured" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Overview", exact: true }).click();
+  await expect(page.locator(".stat-value").nth(1)).toContainText("0.000");
+});
+
+test("unsupported and stale telemetry never remain live readings", async ({
+  page,
+}) => {
+  await desktopFixture(page);
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: "Live hardware", exact: true })
+    .click();
+  await page.evaluate(() =>
+    window.pushHardware({
+      status: "ready",
+      updatedAt: Date.now() - 20000,
+      appsUpdatedAt: Date.now() - 20000,
+      battery: { status: "charging", chargeWatts: 99 },
+      apps: {
+        status: "ready",
+        rows: [{ name: "Stale app", cpuPercent: 99, processes: 1 }],
+      },
+    }),
+  );
+  await expect(
+    page.getByText("Readings are stale.", { exact: false }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Battery charging power", exact: true }),
+  ).toContainText("Unavailable");
+  await expect(page.getByText("Stale app")).not.toBeVisible();
+  await page.evaluate(() =>
+    window.pushHardware({
+      status: "unavailable",
+      message: "PowerShell is restricted on this PC.",
+    }),
+  );
+  await expect(
+    page.getByText("PowerShell is restricted on this PC."),
+  ).toBeVisible();
+});
+
+test("web hardware page does not show fabricated device readings", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: "Live hardware", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Windows desktop app required" }),
+  ).toBeVisible();
 });

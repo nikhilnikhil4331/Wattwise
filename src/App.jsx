@@ -64,6 +64,7 @@ import {
 
 import { restoreState } from "./persistence";
 import DesktopHelp from "./DesktopHelp";
+import HardwarePanel from "./HardwarePanel";
 
 const desktopBridge = window.wattwiseDesktop;
 const isDesktop = Boolean(desktopBridge);
@@ -74,6 +75,7 @@ const NAV = [
   { name: "Usage history", icon: History },
   { name: "Cost calculator", icon: Wallet },
   { name: "My device", icon: Monitor },
+  { name: "Live hardware", icon: Cpu },
 ];
 function load() {
   try {
@@ -126,6 +128,7 @@ export default function App({ desktopInitial = null }) {
   const [desktopInfo, setDesktopInfo] = useState(
     desktopInitial?.desktop || null,
   );
+  const [hardware, setHardware] = useState(desktopInitial?.hardware || null);
   const [settings, setSettings] = useState(
     initial?.settings || DEFAULT_SETTINGS,
   );
@@ -165,6 +168,7 @@ export default function App({ desktopInitial = null }) {
     setSensorName(state.sensorName || "");
     setStorageError(state.storageError || false);
     setDesktopInfo(state.desktop);
+    setHardware(state.hardware || null);
   }, []);
   useEffect(() => {
     if (!isDesktop) return;
@@ -499,7 +503,7 @@ export default function App({ desktopInitial = null }) {
             <span className="status-dot" />
           </div>
           <div className="sidebar-version">
-            WATTWISE <span>v1.0</span>
+            WATTWISE <span>v1.1</span>
           </div>
         </div>
       </aside>
@@ -598,40 +602,52 @@ export default function App({ desktopInitial = null }) {
                 : "Browser storage is full or unavailable. Export your data before closing this page."}
             </div>
           )}
-          {sensorError && session.mode === "sensor" && (
-            <div className="error-banner">
-              <Info size={17} />
-              <span>{sensorError} Missing readings are not counted.</span>
-              <button onClick={() => setModal("help")}>
-                Setup guide <ArrowRight size={15} />
+          {sensorError &&
+            session.mode === "sensor" &&
+            page !== "Live hardware" && (
+              <div className="error-banner">
+                <Info size={17} />
+                <span>{sensorError} Missing readings are not counted.</span>
+                <button
+                  onClick={() =>
+                    isDesktop ? setPage("Live hardware") : setModal("help")
+                  }
+                >
+                  {isDesktop ? "Check live hardware" : "Setup guide"}{" "}
+                  <ArrowRight size={15} />
+                </button>
+              </div>
+            )}
+          {page !== "Live hardware" && (
+            <div className={`source-notice ${isDemo ? "" : "real-source"}`}>
+              <span>
+                <span className={`status-dot ${isDemo ? "purple-dot" : ""}`} />
+                <strong>
+                  {isDemo
+                    ? "You’re exploring demo mode"
+                    : session.mode === "estimate"
+                      ? "Wattage-based estimate"
+                      : "Battery discharge sensor"}
+                </strong>
+                <span className="notice-detail">
+                  {isDemo
+                    ? "Sample data, real possibilities. Connect your device to make it yours."
+                    : session.mode === "estimate"
+                      ? `${settings.watts} W input · not a hardware measurement · ${isDesktop ? "background tracking enabled" : "records while this app is open"}`
+                      : isDesktop
+                        ? "Built-in Windows reader · battery discharge only, not wall consumption"
+                        : "Battery-side power only, not wall consumption · records while this app is open"}
+                </span>
+              </span>
+              <button onClick={() => setModal("settings")}>
+                {isDemo ? "Set up tracking" : "Manage source"}
+                <ArrowRight size={15} />
               </button>
             </div>
           )}
-          <div className={`source-notice ${isDemo ? "" : "real-source"}`}>
-            <span>
-              <span className={`status-dot ${isDemo ? "purple-dot" : ""}`} />
-              <strong>
-                {isDemo
-                  ? "You’re exploring demo mode"
-                  : session.mode === "estimate"
-                    ? "Wattage-based estimate"
-                    : "Battery discharge sensor"}
-              </strong>
-              <span className="notice-detail">
-                {isDemo
-                  ? "Sample data, real possibilities. Connect your device to make it yours."
-                  : session.mode === "estimate"
-                    ? `${settings.watts} W input · not a hardware measurement · ${isDesktop ? "background tracking enabled" : "records while this app is open"}`
-                    : isDesktop
-                      ? "Built-in Windows reader · battery discharge only, not wall consumption"
-                      : "Battery-side power only, not wall consumption · records while this app is open"}
-              </span>
-            </span>
-            <button onClick={() => setModal("settings")}>
-              {isDemo ? "Set up tracking" : "Manage source"}
-              <ArrowRight size={15} />
-            </button>
-          </div>
+          {page === "Live hardware" && (
+            <HardwarePanel hardware={hardware} isDesktop={isDesktop} />
+          )}
           {page === "Overview" && (
             <>
               <section className="hero">

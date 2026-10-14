@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
+import { batteryTelemetry, ProcessActivity } from "./hardware.js";
 
 export function parseBatterySample(input) {
   if (!input || input.error)
@@ -25,7 +26,7 @@ export function parseBatterySample(input) {
       return {
         available: false,
         message:
-          "Laptop is plugged in or not discharging. Battery watts are unavailable; wall electricity needs an external meter.",
+          "Battery discharge tracking is waiting. Open Live hardware for charging readings and app CPU activity. Socket electricity needs an external meter.",
       };
     }
     if (
@@ -54,12 +55,29 @@ export function parseBatterySample(input) {
 const SENSOR_SCRIPT = `
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+$clock = [Diagnostics.Stopwatch]::StartNew()
+$nextApps = 0
 while ($true) {
+  $sample = @{}
   try {
-    $b = @(Get-CimInstance -Namespace root/wmi -ClassName BatteryStatus | Where-Object { $_.Active } | Select-Object Discharging, DischargeRate, PowerOnline, Charging)
-    $line = @{ batteries = $b } | ConvertTo-Json -Compress -Depth 4
-    [Console]::WriteLine($line)
-  } catch { [Console]::WriteLine('{"error":true}') }
+    $sample.batteries = @(Get-CimInstance -Namespace root/wmi -ClassName BatteryStatus | Where-Object { $_.Active } | Select-Object Discharging, DischargeRate, PowerOnline, Charging, ChargeRate)
+  } catch { $sample.error = $true }
+  if ($clock.Elapsed.TotalMilliseconds -ge $nextApps) {
+    try {
+      $items = @(Get-Process -ErrorAction Stop | ForEach-Object {
+        try {
+          $p = $_
+          $cpu = $p.CPU
+          if ($p.Id -gt 0 -and $null -ne $cpu) {
+            @{ pid = $p.Id; name = $p.ProcessName; started = $p.StartTime.ToUniversalTime().Ticks.ToString(); cpuSeconds = [double]$cpu }
+          }
+        } catch { }
+      })
+      $sample.processes = @{ items = $items; cores = [Environment]::ProcessorCount; tickMs = $clock.Elapsed.TotalMilliseconds }
+    } catch { $sample.processes = @{ error = $true } }
+    $nextApps = $clock.Elapsed.TotalMilliseconds + 5000
+  }
+  [Console]::WriteLine(($sample | ConvertTo-Json -Compress -Depth 5))
   [Console]::Out.Flush()
   Start-Sleep -Milliseconds 1000
 }
@@ -67,24 +85,37 @@ while ($true) {
 
 export function startWindowsSensor(
   onSample,
-  { platform = process.platform, spawnProcess = spawn } = {},
+  {
+    platform = process.platform,
+    spawnProcess = spawn,
+    onHardware = () => {},
+  } = {},
 ) {
-  if (platform !== "win32") {
-    onSample({
-      available: false,
-      message:
-        "The desktop battery sensor requires Windows 11. Estimate mode works on other operating systems.",
+  const unavailable = (message) => {
+    onHardware({
+      status: "unavailable",
+      message,
+      updatedAt: Date.now(),
+      battery: null,
+      apps: null,
     });
+    onSample({ available: false, message });
+  };
+  if (platform !== "win32") {
+    unavailable(
+      "Live hardware requires Windows. Estimate mode works on other operating systems.",
+    );
     return () => {};
   }
   let stopped = false,
     child = null,
     retry = null,
     watchdog = null;
-  const unavailable = (message) => onSample({ available: false, message });
   const launch = () => {
     if (stopped) return;
     let buffer = "";
+    const activity = new ProcessActivity();
+    let appsUpdatedAt = 0;
     const executable = path.win32.join(
       process.env.SystemRoot || "C:\\Windows",
       "System32",
@@ -113,14 +144,14 @@ export function startWindowsSensor(
           );
           proc.kill();
         }
-      }, 8000);
+      }, 15000);
     };
     resetWatchdog();
     proc.stdout.setEncoding("utf8");
     proc.stdout.on("data", (chunk) => {
       if (stopped || child !== proc) return;
       buffer += chunk;
-      if (buffer.length > 65536) {
+      if (buffer.length > 1048576) {
         buffer = "";
         unavailable("Invalid sensor response. Reconnecting.");
         proc.kill();
@@ -133,7 +164,22 @@ export function startWindowsSensor(
         if (!line) continue;
         resetWatchdog();
         try {
-          onSample(parseBatterySample(JSON.parse(line)));
+          const input = JSON.parse(line);
+          const updatedAt = Date.now();
+          if (input?.processes) {
+            activity.accept(input.processes);
+            appsUpdatedAt = updatedAt;
+          } else if (updatedAt - appsUpdatedAt > 15000) {
+            activity.reset();
+          }
+          onHardware({
+            status: "ready",
+            updatedAt,
+            appsUpdatedAt,
+            battery: batteryTelemetry(input),
+            apps: activity.value,
+          });
+          onSample(parseBatterySample(input));
         } catch {
           unavailable("Windows sensor returned an unreadable response.");
         }

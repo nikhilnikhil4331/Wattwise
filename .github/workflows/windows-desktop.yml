@@ -36,6 +36,10 @@ jobs:
         run: npm ci
       - name: Test calculations, persistence, and background tracker
         run: npm test
+      - name: Install browser test runtime
+        run: npx playwright install chromium
+      - name: Test browser UI and hardware telemetry states
+        run: npm run test:e2e
       - name: Build Windows x64 installer
         run: npm run package:win
       - name: Smoke-test packaged Windows app

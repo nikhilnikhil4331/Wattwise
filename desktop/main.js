@@ -10,6 +10,7 @@ import {
 } from "electron";
 import path from "node:path";
 import fs from "node:fs";
+import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { DesktopTracker } from "./tracker.js";
 import { startWindowsSensor } from "./windows-sensor.js";
@@ -18,6 +19,36 @@ import { csvFor } from "../src/energy.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const index = path.join(here, "..", "dist", "index.html");
+const sensorListeners = new Set();
+const hardwareDevice = {
+  processor: os.cpus()[0]?.model || "Unknown processor",
+  logicalProcessors: os.cpus().length,
+};
+let hardware = {
+  status: "checking",
+  message: "Automatically checking Windows sensors…",
+};
+let stopHardware;
+function startHardware() {
+  stopHardware?.();
+  stopHardware = startWindowsSensor(
+    (sample) => {
+      for (const listener of sensorListeners) listener(sample);
+    },
+    {
+      onHardware: (value) => {
+        hardware = value;
+        publish();
+      },
+    },
+  );
+}
+function endHardware(message) {
+  stopHardware?.();
+  stopHardware = null;
+  hardware = { status: "unavailable", message };
+}
+
 let window,
   tray,
   tracker,
@@ -38,6 +69,7 @@ else {
     });
   app.on("before-quit", () => {
     quitting = true;
+    endHardware("Hardware monitoring stopped.");
     tracker?.close();
   });
   // The native main process owns sampling, not the hidden/closed renderer.
@@ -60,7 +92,11 @@ function desktopInfo() {
   };
 }
 function snapshot() {
-  return { ...tracker.state, desktop: desktopInfo() };
+  return {
+    ...tracker.state,
+    desktop: desktopInfo(),
+    hardware: { ...hardware, device: hardwareDevice },
+  };
 }
 function showWindow() {
   if (!window || window.isDestroyed()) return;
@@ -119,7 +155,10 @@ async function start() {
   const stateFile = path.join(app.getPath("userData"), "state.json");
   tracker = new DesktopTracker({
     initial: readState(stateFile),
-    sensor: startWindowsSensor,
+    sensor: (callback) => {
+      sensorListeners.add(callback);
+      return () => sensorListeners.delete(callback);
+    },
     writeState: (state) => writeState(stateFile, state),
   });
   const icon = nativeImage.createFromPath(
@@ -219,10 +258,20 @@ async function start() {
     await fs.promises.writeFile(result.filePath, data, "utf8");
     return { saved: true };
   });
-  powerMonitor.on("suspend", () => tracker.suspend());
-  powerMonitor.on("resume", () => tracker.resume());
-  powerMonitor.on("shutdown", () => tracker.close());
+  powerMonitor.on("suspend", () => {
+    endHardware("Monitoring suspended while the laptop sleeps.");
+    tracker.suspend();
+  });
+  powerMonitor.on("resume", () => {
+    tracker.resume();
+    startHardware();
+  });
+  powerMonitor.on("shutdown", () => {
+    endHardware("Monitoring stopped.");
+    tracker.close();
+  });
   await window.loadFile(index);
   if (!process.argv.includes("--hidden")) showWindow();
   tracker.start();
+  startHardware();
 }

@@ -22,7 +22,17 @@ export default function DesktopHelp() {
         every second. Minute/hour views group those readings. Unsupported
         sensors show “No signal”; they never turn into fake measurements.
       </p>
-      <h3>Plugged in? Know the limitation</h3>
+      <h3>Plugged in? Open Live hardware</h3>
+      <p>
+        The Live hardware page automatically checks charging sensors and app CPU
+        activity. No terminal commands or custom driver are needed. Charging
+        watts appear only if your battery driver provides them; full or
+        charge-limited batteries may not be charging. CPU activity is not
+        per-app watts, and this version does not measure GPU power or app
+        energy/cost. Live readings stay separate from energy history and CSV
+        exports.
+      </p>
+      <h3>Know the limitation</h3>
       <p>
         Battery power is not wall electricity. When charging or plugged in, the
         sensor pauses energy accumulation. For an approximation, explicitly
