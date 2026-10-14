@@ -1,0 +1,40 @@
+name: Feature request
+description: Suggest an improvement with a clear use case.
+title: "[Feature]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please review the [roadmap](https://github.com/nikhilnikhil4331/Wattwise/blob/main/docs/ROADMAP.md) first.
+        Feature ideas are not delivery commitments. A driver cannot create a missing sensor.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Describe the user need, rather than just the implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Explain what the user should see and how unavailable/unsupported cases should behave.
+    validations:
+      required: true
+  - type: textarea
+    id: measurement
+    attributes:
+      label: Measurement source or integration details (if relevant)
+      description: Name the device/API, its documentation and how accuracy could be tested. Do not include tokens, credentials or private network details.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives and trade-offs
+      description: Consider privacy, performance, hardware support and maintenance cost.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I checked existing requests and the roadmap.
+          required: true
