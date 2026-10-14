@@ -1,0 +1,81 @@
+name: Bug report
+description: Report a reproducible app, installer, or sensor problem.
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Wattwise. Read the [support guide](https://github.com/nikhilnikhil4331/Wattwise/blob/main/SUPPORT.md) first.
+        Do not post usernames, computer names, serial numbers, credentials, state files, or unredacted system reports.
+        For a security-sensitive problem, follow [SECURITY.md](https://github.com/nikhilnikhil4331/Wattwise/blob/main/SECURITY.md).
+  - type: input
+    id: version
+    attributes:
+      label: Wattwise version / release tag
+      placeholder: "For example: 1.1.0 / wattwise-v1.1.0-build.4.1"
+    validations:
+      required: true
+  - type: dropdown
+    id: edition
+    attributes:
+      label: How are you running Wattwise?
+      options:
+        - Installed Windows desktop app
+        - Desktop app from source
+        - Browser version
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Windows version and laptop model
+      description: For browser issues, include browser name/version. No serial number or full system dump.
+      placeholder: "Windows 11, HP Victus 15, Ryzen 5 5600H"
+    validations:
+      required: true
+  - type: dropdown
+    id: source
+    attributes:
+      label: Tracking source / view
+      options:
+        - Battery sensor
+        - Wattage estimate
+        - Demo preview
+        - Live hardware
+        - Installer / other
+    validations:
+      required: true
+  - type: dropdown
+    id: battery
+    attributes:
+      label: Battery / charger state when this happened
+      options:
+        - Plugged in and charging
+        - Plugged in, full or charge-limited
+        - Unplugged and discharging
+        - No battery / unknown / not relevant
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: "1. Open…\n2. Select…\n3. Observe…"
+    validations:
+      required: true
+  - type: textarea
+    id: expected-actual
+    attributes:
+      label: Expected behavior and what actually happened
+      description: Include exact error text and a redacted screenshot if useful. CPU % is not watts; battery watts are not socket watts.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and checked the support guide.
+          required: true
+        - label: I removed private information from text and attachments.
+          required: true
