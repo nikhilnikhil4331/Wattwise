@@ -1,5 +1,5 @@
 // Exercise the packaged Windows executable, not a mocked browser bridge.
-const { _electron: electron } = require("@playwright/test");
+const { _electron: electron, expect } = require("@playwright/test");
 const path = require("node:path");
 const fs = require("node:fs");
 const assert = require("node:assert/strict");
@@ -20,13 +20,22 @@ const assert = require("node:assert/strict");
     page.on("pageerror", (error) => errors.push(error.message));
     // Exercise the actual read-only PowerShell process feed on Windows, not mocks.
     // Hosted runners have no battery: app telemetry must still work independently.
-    await page.waitForFunction(
-      async () =>
-        (await window.wattwiseDesktop.getState()).hardware?.apps?.status ===
-        "ready",
-      undefined,
-      { timeout: 45000 },
-    );
+    // waitForFunction treats a Promise as truthy; poll the resolved IPC value
+    // from Node instead, so this cannot pass before the first CPU interval.
+    await expect
+      .poll(
+        async () => {
+          const state = await page.evaluate(() =>
+            window.wattwiseDesktop.getState(),
+          );
+          return state.hardware?.apps?.status;
+        },
+        {
+          timeout: 45000,
+          message: "Windows process telemetry must produce a real CPU interval",
+        },
+      )
+      .toBe("ready");
     const live = await page.evaluate(() => window.wattwiseDesktop.getState());
     assert.ok(live.hardware.apps.rows.length > 0);
     assert.ok(
@@ -71,12 +80,17 @@ const assert = require("node:assert/strict");
         launchOnLogin: false,
       }),
     );
-    await page.waitForFunction(
-      async () =>
-        (await window.wattwiseDesktop.getState()).session.seconds >= 1,
-      undefined,
-      { timeout: 15000 },
-    );
+    await expect
+      .poll(
+        async () => {
+          const state = await page.evaluate(() =>
+            window.wattwiseDesktop.getState(),
+          );
+          return state.session.seconds;
+        },
+        { timeout: 15000 },
+      )
+      .toBeGreaterThanOrEqual(1);
     const before = await page.evaluate(() => window.wattwiseDesktop.getState());
     // Native Close must hide the window, without stopping the main-process sampler.
     await app.evaluate(({ BrowserWindow }) =>
@@ -129,5 +143,13 @@ const assert = require("node:assert/strict");
   }
 })().catch((error) => {
   console.error(error);
+  if (process.env.GITHUB_ACTIONS === "true") {
+    const message = String(error.stack || error)
+      .slice(0, 5000)
+      .replaceAll("%", "%25")
+      .replaceAll("\r", "%0D")
+      .replaceAll("\n", "%0A");
+    console.error(`::error title=Packaged Windows smoke test::${message}`);
+  }
   process.exitCode = 1;
 });
