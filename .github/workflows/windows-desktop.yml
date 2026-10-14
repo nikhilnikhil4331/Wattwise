@@ -14,6 +14,7 @@ on:
       - 'package-lock.json'
       - 'index.html'
       - 'vite.config.js'
+      - 'playwright.config.js'
       - '.github/workflows/windows-desktop.yml'
 permissions:
   contents: read

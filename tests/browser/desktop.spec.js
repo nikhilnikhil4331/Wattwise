@@ -175,8 +175,14 @@ test("charging and process activity are separate from wall watts and billing", a
   await expect(
     page.getByRole("region", { name: "Socket power", exact: true }),
   ).toContainText("Not measured");
+  const appRow = page
+    .getByRole("row")
+    .filter({
+      has: page.getByRole("rowheader", { name: "Browser", exact: true }),
+    });
+  await expect(appRow).toContainText("12.5%");
   await expect(
-    page.getByRole("row", { name: "Browser 3 12.5% Not measured" }),
+    appRow.getByRole("cell", { name: "Not measured", exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Overview", exact: true }).click();
   await expect(page.locator(".stat-value").nth(1)).toContainText("0.000");
